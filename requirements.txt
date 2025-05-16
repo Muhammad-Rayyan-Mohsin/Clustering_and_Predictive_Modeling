@@ -1,0 +1,9 @@
+Flask
+pandas
+numpy
+scikit-learn
+xgboost
+statsmodels
+# torch (optional, if neural network from 2.py is to be fully supported and deployed)
+# matplotlib (often a dependency of others or useful for non-web visualizations)
+# seaborn (similar to matplotlib) 

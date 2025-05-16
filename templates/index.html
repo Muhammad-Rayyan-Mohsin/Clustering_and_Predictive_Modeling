@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Energy Demand Analysis</title>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <!-- Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Bootstrap Icons for icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-lightning-charge-fill me-2"></i>Energy Demand Analysis
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-center">
+                    <li class="nav-item">
+                        <div class="theme-switch-wrapper">
+                            <label class="theme-switch" for="checkbox">
+                                <input type="checkbox" id="checkbox" />
+                                <div class="slider"></div>
+                            </label>
+                            <small class="ms-2 text-light">Light Mode</small>
+                        </div>
+                    </li>
+                    <li class="nav-item ms-3">
+                        <button type="button" class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#helpModal">
+                            <i class="bi bi-question-circle me-1"></i> Help
+                        </button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <!-- Sidebar Controls -->
+            <div class="col-lg-3">
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h4><i class="bi bi-sliders me-2"></i>Controls</h4>
+                    </div>
+                    <div class="card-body">
+                        <form id="analysisForm">
+                            <div class="mb-3">
+                                <label for="city" class="form-label">City</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-building"></i></span>
+                                    <select class="form-select" id="city" name="city">
+                                        {% for city_name in cities %}
+                                            {% if city_name == 'default_city' %}
+                                                <option value="default_city" selected>Default (All Cities)</option>
+                                            {% else %}
+                                                <option value="{{ city_name }}">{{ city_name }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Date Range</label>
+                                <div class="row">
+                                    <div class="col-md-6 mb-2">
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
+                                            <input type="date" class="form-control" id="startDate" name="startDate" value="2018-01-01">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
+                                            <input type="date" class="form-control" id="endDate" name="endDate" value="2018-12-31">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label for="lookback" class="form-label">Look-back Window</label>
+                                <div class="d-flex align-items-center mb-1">
+                                    <span id="lookbackValue" class="me-2">24</span>
+                                    <span class="small text-muted">hours</span>
+                                    <div class="ms-auto">
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button" class="btn btn-outline-secondary" data-hour="12">12h</button>
+                                            <button type="button" class="btn btn-outline-secondary" data-hour="24">24h</button>
+                                            <button type="button" class="btn btn-outline-secondary" data-hour="48">48h</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <input type="range" class="form-range" id="lookback" name="lookback" min="1" max="168" value="24">
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label for="numClusters" class="form-label">Number of Clusters (k)</label>
+                                <div class="d-flex align-items-center mb-1">
+                                    <div class="d-flex border rounded p-1">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary me-1" id="decrementClusters">-</button>
+                                        <span id="numClustersValue" class="px-3 py-1">3</span>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary ms-1" id="incrementClusters">+</button>
+                                    </div>
+                                </div>
+                                <input type="range" class="form-range" id="numClusters" name="numClusters" min="2" max="10" value="3">
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label class="form-label">Forecasting Models</label>
+                                <div class="d-flex flex-wrap">
+                                    <div class="form-check form-switch me-3 mb-2">
+                                        <input class="form-check-input model-checkbox" type="checkbox" value="Linear" id="modelLinear" checked>
+                                        <label class="form-check-label" for="modelLinear">Linear</label>
+                                    </div>
+                                    <div class="form-check form-switch me-3 mb-2">
+                                        <input class="form-check-input model-checkbox" type="checkbox" value="RandomForest" id="modelRandomForest">
+                                        <label class="form-check-label" for="modelRandomForest">Random Forest</label>
+                                    </div>
+                                    <div class="form-check form-switch me-3 mb-2">
+                                        <input class="form-check-input model-checkbox" type="checkbox" value="XGBoost" id="modelXGBoost">
+                                        <label class="form-check-label" for="modelXGBoost">XGBoost</label>
+                                    </div>
+                                    <div class="form-check form-switch me-3 mb-2">
+                                        <input class="form-check-input model-checkbox" type="checkbox" value="ARIMA" id="modelARIMA">
+                                        <label class="form-check-label" for="modelARIMA">ARIMA</label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-success w-100">
+                                <i class="bi bi-play-fill me-1"></i>Run Analysis
+                            </button>
+                        </form>
+                        
+                        <div id="loadingSpinner" class="d-none text-center mt-3">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p>Processing Data...</p>
+                        </div>
+                        
+                        <div id="errorMessage" class="alert mt-3 d-none" role="alert">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <span class="error-text">Error message here.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content Area -->
+            <div class="col-lg-9">
+                <!-- Cluster Visualization Panel -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5><i class="bi bi-diagram-3 me-2"></i>Cluster Visualization</h5>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="downloadClusterBtn">
+                                <i class="bi bi-download me-1"></i>Export
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="clusterPlot" style="width:100%; height:450px;"></div>
+                        <div id="clusterMetricsContainer" class="mt-2">
+                            <div class="row">
+                                <div class="col-md-4 mb-2">
+                                    <h6>Silhouette Score</h6>
+                                    <span id="silhouetteScore" class="badge bg-light text-dark">-</span>
+                                </div>
+                                <div class="col-md-8 mb-2">
+                                    <h6>Features Used</h6>
+                                    <small id="clusterFeaturesUsed">-</small>
+                                </div>
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-12">
+                                    <h6>Cluster Centers (Original Scale)</h6>
+                                    <pre id="clusterCenters">-</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Forecast Plot Panel -->
+                <div class="card shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5><i class="bi bi-graph-up me-2"></i>Demand Forecast</h5>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-sm btn-outline-light" id="downloadForecastBtn">
+                                <i class="bi bi-download me-1"></i>Export
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="forecastPlot" style="width:100%; height:450px;"></div>
+                        <div id="forecastMetricsContainer" class="d-none">
+                            <div class="row">
+                                <div class="col-12 mb-2">
+                                    <h6>Forecast Metrics (<span id="forecastModelUsed"></span>)</h6>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-3 mb-2">
+                                    <small>MAE: <span id="forecastMAE">-</span></small>
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <small>RMSE: <span id="forecastRMSE">-</span></small>
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <small>R²: <span id="forecastR2">-</span></small>
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <small>MAPE: <span id="forecastMAPE">-</span></small>
+                                </div>
+                            </div>
+                            <div class="row mt-1">
+                                <div class="col-12">
+                                    <small>Features Used: <span id="forecastFeaturesUsed">-</span></small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="helpModalLabel">
+                        <i class="bi bi-info-circle me-2"></i>Help & Documentation
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <h6>About This Application</h6>
+                    <p>This platform allows you to perform clustering analysis on energy demand data and generate demand forecasts using various machine learning models.
+                    The primary dataset used is 'dataset_cleaned.csv'.</p>
+                    
+                    <hr>
+                    <h6>Controls Explanation</h6>
+                    <ul>
+                        <li><strong>City Selector:</strong> (Currently uses a default value as the base dataset isn't city-specific). Select a city for analysis if multiple city datasets were available.</li>
+                        <li><strong>Date Range Picker:</strong> Select the start and end dates to filter the data for analysis.</li>
+                        <li><strong>Look-back Window:</strong> (For Forecasting) Number of past hours to use for creating lag features (e.g., demand 24 hours ago). Affects models like Linear Regression, Random Forest, XGBoost.</li>
+                        <li><strong>Number of Clusters (k):</strong> (For Clustering) Select the desired number of clusters for the K-Means algorithm.</li>
+                        <li><strong>Forecasting Models:</strong> Check the boxes to select which forecasting models to run and display. Results for each selected model will be fetched.
+                            <ul>
+                                <li><strong>Linear Regression:</strong> A basic statistical model establishing a linear relationship between input features and demand.</li>
+                                <li><strong>Random Forest:</strong> An ensemble learning method using multiple decision trees for improved accuracy and robustness.</li>
+                                <li><strong>XGBoost:</strong> A powerful gradient boosting algorithm known for high performance.</li>
+                                <li><strong>ARIMA:</strong> (Autoregressive Integrated Moving Average) A time series model that uses past demand values to forecast future demand. It operates independently of other features like weather.</li>
+                            </ul>
+                        </li>
+                        <li><strong>Run Analysis Button:</strong> Submits the selected parameters to the backend to perform clustering and forecasting.</li>
+                    </ul>
+
+                    <hr>
+                    <h6>Visualizations & Outputs</h6>
+                    <p><strong>Cluster Visualization (PCA):</strong></p>
+                    <ul>
+                        <li>Displays data points projected onto their first two Principal Components (PCA), colored by their assigned K-Means cluster.</li>
+                        <li><strong>Silhouette Score:</strong> A metric (-1 to 1) indicating how similar an object is to its own cluster compared to other clusters. Higher is better.</li>
+                        <li><strong>Cluster Centers:</strong> Shows the mean values of the features for each cluster in their original scale. Helps in interpreting what defines each cluster.</li>
+                        <li><strong>Features Used:</strong> Lists the features from the dataset used to perform the clustering.</li>
+                    </ul>
+                    <p><strong>Demand Forecast:</strong></p>
+                    <ul>
+                        <li>Shows a time-series plot comparing actual demand values with the predicted values from the selected forecasting model(s).</li>
+                        <li><strong>Metrics:</strong>
+                            <ul>
+                                <li><strong>MAE (Mean Absolute Error):</strong> Average absolute difference between actual and predicted values. Lower is better.</li>
+                                <li><strong>RMSE (Root Mean Squared Error):</strong> Square root of the average of squared differences. Penalizes large errors more. Lower is better.</li>
+                                <li><strong>R² (R-squared):</strong> Proportion of the variance in the dependent variable that is predictable from the independent variables. Closer to 1 is better.</li>
+                                <li><strong>MAPE (Mean Absolute Percentage Error):</strong> Average absolute percentage difference. Useful for understanding error in relative terms. Lower is better.</li>
+                                <li><strong>Normalized Metrics:</strong> All metrics are normalized to a 0-100% scale where higher values represent better performance, making comparison between models more intuitive.</li>
+                                <li><strong>Performance Score:</strong> A composite score that combines all normalized metrics into a single value, providing an overall assessment of model quality on a scale from 0-100%.</li>
+                                <li><strong>Performance Grade:</strong> A qualitative label (Excellent, Good, Satisfactory, Fair, Poor) based on the performance score.</li>
+                            </ul>
+                        </li>
+                         <li><strong>Features Used:</strong> Lists the features used by the selected forecasting model. ARIMA uses only past demand values.</li>
+                    </ul>
+                    
+                    <hr>
+                    <h6>Technical Details</h6>
+                    <p><strong>Data Source:</strong> Primarily uses <code>dataset_cleaned.csv</code>. Data is preprocessed by handling missing values and converting time columns.</p>
+                    <p><strong>Clustering Approach:</strong>
+                        K-Means clustering is applied to scaled features. Principal Component Analysis (PCA) is used to reduce dimensionality to 2 components for visualization.
+                        The features used for clustering are typically related to weather conditions as per <code>1.py</code>.
+                    </p>
+                    <p><strong>Forecasting Approaches:</strong>
+                        Several models are available:
+                        <ul>
+                            <li><strong>Regression Models (Linear, Random Forest, XGBoost):</strong> Use features like weather data, time-based features (hour, day of week), and engineered lag/rolling window features from past demand. Features are scaled before training.</li>
+                            <li><strong>ARIMA:</strong> A univariate time series model applied directly to the demand data. It captures temporal dependencies.</li>
+                        </ul>
+                        Data is split chronologically into training and testing sets. Models are trained on the training set and evaluated on the test set.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html> 
